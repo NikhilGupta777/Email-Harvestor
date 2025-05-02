@@ -194,130 +194,190 @@
             outputArea.scrollTop = outputArea.scrollHeight;
         }
 
-        commandInput.addEventListener('keydown', async (event) => {
-            if (event.key === 'Enter' && commandInput.value.trim() !== '') {
-                const command = commandInput.value.trim();
-                addOutput(`${promptElement.textContent} ${command}`); // Echo command
-                commandInput.disabled = true; // Disable input while processing
+         commandInput.addEventListener('keydown', async (event) => {
+             if (event.key === 'Enter' && commandInput.value.trim() !== '') {
+                 const command = commandInput.value.trim();
+                 addOutput(`${promptElement.textContent} ${command}`); // Echo command
+                 commandInput.disabled = true; // Disable input while processing
 
-                // --- START: New client-side parsing logic ---
-                // Basic parsing: Assumes URL is first, options follow (like original CLI simulation)
-                // This is a simplified approach. A more robust parser might be needed
-                // for complex arguments (e.g., quoted strings with spaces).
-                const parts = command.split(/\s+/); // Split by one or more spaces
-                let requestBody = { client_id: clientId }; // Start with client ID
+                 // --- START: Corrected client-side parsing logic ---
+                 // Use the raw command string entered by the user, without the echoed prompt
+                 const rawCommandInput = command;
 
-                if (parts.length > 0) {
-                    requestBody.start_url = parts[0]; // Assume first part is the URL
+                 // Split the command string entered by the user (without the echoed prompt)
+                 const parts = rawCommandInput.split(/\s+/).filter(part => part.length > 0); // Split and remove empty parts
+                 let requestBody = { client_id: clientId }; // Start with client ID
 
-                    // Parse options (match keys in RunHarvesterRequest model)
-                    for (let i = 1; i < parts.length; i += 2) {
-                        const option = parts[i];
-                        const value = parts[i + 1]; // Assumes options always have a value
+                 if (parts.length > 0) {
+                     // Now, the first non-empty part should be the URL
+                     requestBody.start_url = parts[0]; // Assume the first non-empty part is the URL
 
-                        switch (option) {
-                            case '-o':
-                            case '--output':
-                                requestBody.output = value;
-                                break;
-                            case '-d':
-                            case '--depth':
-                                requestBody.depth = parseInt(value, 10);
-                                break;
-                            case '-p':
-                            case '--max-pages':
-                                requestBody.max_pages = parseInt(value, 10);
-                                break;
-                            case '-r':
-                            case '--rate':
-                                requestBody.rate_limit = parseFloat(value); // Match server's key name 'rate_limit'
-                                break;
-                            case '--scope':
-                                if (value === 'domain' || value === 'subdomain') {
-                                    requestBody.scope = value;
-                                } else {
-                                    addOutput(`[WARN] Invalid scope value: ${value}. Using default.`, 'log-warning');
-                                }
-                                break;
-                            case '-ua':
-                            case '--user-agent':
-                                requestBody.user_agent = value;
-                                break;
-                            case '--concurrency':
-                                requestBody.concurrency = parseInt(value, 10);
-                                break;
-                            case '-v': // Handle boolean flag
-                            case '--verbose':
-                                // Check if it's a flag, not expecting a value immediately after
-                                requestBody.verbose = true;
-                                // Decrement i so the loop correctly processes the *next* option
-                                i--; // The loop increments i by 2, we need to effectively increment by 1
-                                break;
+                     // Parse options starting from the second part (index 1)
+                     for (let i = 1; i < parts.length; i++) { // Loop through remaining parts
+                         const part = parts[i];
 
-                            default:
-                                // Handle unknown options or options without values (like -v)
-                                // If the next part doesn't start with '-' assume it's a value
-                                if (value && !value.startsWith('-')) {
-                                    addOutput(`[WARN] Ignoring unknown option or missing value: ${option}`, 'log-warning');
-                                } else {
-                                    // This case handles flags like -v correctly or lone options at the end
-                                    addOutput(`[WARN] Ignoring unknown option: ${option}`, 'log-warning');
-                                    i--; // Adjust index as no value was consumed
-                                }
-                                break;
-                        }
-                    }
-                } else {
-                    addOutput("[ERROR] Please enter a command with a start URL.", 'log-error');
-                    commandInput.disabled = false;
-                    commandInput.focus();
-                    return; // Stop here if no command parts
-                }
-                // --- END: New client-side parsing logic ---
+                         // Check if the part is an option flag (starts with - or --)
+                         if (part.startsWith('-')) {
+                            const option = part;
+                            const nextPart = parts[i + 1]; // Look at the next part for a value
 
-                try {
-                    const response = await fetch('/run', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        // --- START: Use the parsed requestBody ---
-                        body: JSON.stringify(requestBody),
-                        // --- END: Use the parsed requestBody ---
-                    });
+                            switch (option) {
+                                case '-o':
+                                case '--output':
+                                    if (nextPart && !nextPart.startsWith('-')) {
+                                        requestBody.output = nextPart;
+                                        i++; // Consume the value
+                                    } else {
+                                        addOutput(`[WARN] Option ${option} requires a value.`, 'log-warning');
+                                    }
+                                    break;
+                                case '-d':
+                                case '--depth':
+                                    if (nextPart && !nextPart.startsWith('-')) {
+                                        requestBody.depth = parseInt(nextPart, 10);
+                                        if (isNaN(requestBody.depth)) {
+                                            addOutput(`[WARN] Invalid value for ${option}: ${nextPart}. Must be an integer.`, 'log-warning');
+                                            delete requestBody.depth; // Remove invalid entry
+                                        }
+                                        i++; // Consume the value
+                                    } else {
+                                        addOutput(`[WARN] Option ${option} requires a value.`, 'log-warning');
+                                    }
+                                    break;
+                                case '-p':
+                                case '--max-pages':
+                                    if (nextPart && !nextPart.startsWith('-')) {
+                                        requestBody.max_pages = parseInt(nextPart, 10);
+                                         if (isNaN(requestBody.max_pages)) {
+                                            addOutput(`[WARN] Invalid value for ${option}: ${nextPart}. Must be an integer.`, 'log-warning');
+                                            delete requestBody.max_pages; // Remove invalid entry
+                                        }
+                                        i++; // Consume the value
+                                    } else {
+                                        addOutput(`[WARN] Option ${option} requires a value.`, 'log-warning');
+                                    }
+                                    break;
+                                case '-r':
+                                case '--rate':
+                                    if (nextPart && !nextPart.startsWith('-')) {
+                                        requestBody.rate_limit = parseFloat(nextPart); // Match server's key name 'rate_limit'
+                                         if (isNaN(requestBody.rate_limit)) {
+                                            addOutput(`[WARN] Invalid value for ${option}: ${nextPart}. Must be a number.`, 'log-warning');
+                                            delete requestBody.rate_limit; // Remove invalid entry
+                                        }
+                                        i++; // Consume the value
+                                    } else {
+                                         addOutput(`[WARN] Option ${option} requires a value.`, 'log-warning');
+                                    }
+                                    break;
+                                case '--scope':
+                                    if (nextPart && !nextPart.startsWith('-')) {
+                                        if (nextPart === 'domain' || nextPart === 'subdomain') {
+                                            requestBody.scope = nextPart;
+                                        } else {
+                                            addOutput(`[WARN] Invalid scope value: ${nextPart}. Must be 'domain' or 'subdomain'.`, 'log-warning');
+                                        }
+                                        i++; // Consume the value
+                                    } else {
+                                         addOutput(`[WARN] Option ${option} requires a value ('domain' or 'subdomain').`, 'log-warning');
+                                    }
+                                    break;
+                                case '-ua':
+                                case '--user-agent':
+                                     if (nextPart && !nextPart.startsWith('-')) {
+                                        requestBody.user_agent = nextPart;
+                                        i++; // Consume the value
+                                    } else {
+                                         addOutput(`[WARN] Option ${option} requires a value.`, 'log-warning');
+                                    }
+                                     break;
+                                case '--concurrency':
+                                     if (nextPart && !nextPart.startsWith('-')) {
+                                        requestBody.concurrency = parseInt(nextPart, 10);
+                                         if (isNaN(requestBody.concurrency)) {
+                                            addOutput(`[WARN] Invalid value for ${option}: ${nextPart}. Must be an integer.`, 'log-warning');
+                                            delete requestBody.concurrency; // Remove invalid entry
+                                        }
+                                        i++; // Consume the value
+                                    } else {
+                                         addOutput(`[WARN] Option ${option} requires a value.`, 'log-warning');
+                                    }
+                                     break;
+                                case '-v':
+                                case '--verbose':
+                                     requestBody.verbose = true; // This is a boolean flag
+                                     // No value to consume, don't increment i
+                                     break;
 
-                    const result = await response.json();
+                                default:
+                                     addOutput(`[WARN] Ignoring unknown option: ${option}`, 'log-warning');
+                                     // Don't consume nextPart as it might be another option or URL
+                                     break;
+                            }
+                         } else {
+                             // If a part doesn't start with '-' and it's not the first part,
+                             // it might be an argument placed incorrectly, or part of a value
+                             // without a preceding option (less likely with CLI style).
+                             // For this basic parser, we'll warn and ignore.
+                             addOutput(`[WARN] Ignoring unexpected argument: ${part}`, 'log-warning');
+                         }
+                     }
 
-                    if (response.status >= 400) { // Check for HTTP error status
-                        addOutput(`[ERROR] Server responded with status ${response.status}: ${result.detail || result.message}`, 'log-error');
-                        commandInput.disabled = false; // Re-enable on error
-                        commandInput.focus();
-                    } else if (result.status !== 'ok') {
-                        // Handle application-level errors from the server's JSON response
-                        addOutput(`[ERROR] Failed to start command: ${result.message}`, 'log-error');
-                        commandInput.disabled = false; // Re-enable on error
-                        commandInput.focus();
-                    }
-                    else {
-                        addOutput(`[INFO] Task started successfully. Output will stream below.`, 'info-message');
-                        // Input remains disabled until the task finishes (signaled by server or manually re-enabled)
-                        // A better approach might wait for a "[INFO] Task finished." message via WebSocket.
-                        commandInput.disabled = false; // Re-enable input after successful start
-                        commandInput.focus();
-                    }
+                 } else {
+                     addOutput("[ERROR] Please enter a command with a start URL.", 'log-error');
+                     commandInput.disabled = false;
+                     commandInput.focus();
+                     return; // Stop here if no command parts
+                 }
+                 // Check if start_url was actually set (e.g., if only options were entered)
+                 if (!requestBody.start_url || requestBody.start_url.startsWith('-')) {
+                     addOutput("[ERROR] Invalid command format. Start URL is required as the first argument.", 'log-error');
+                     commandInput.disabled = false;
+                     commandInput.focus();
+                     return;
+                 }
+                 // --- END: Corrected client-side parsing logic ---
 
-                } catch (error) {
-                    addOutput(`[ERROR] Network or server error sending command: ${error}`, 'log-error');
-                    commandInput.disabled = false; // Re-enable on error
-                    commandInput.focus();
-                } finally {
-                    commandInput.value = ''; // Clear input field
-                    // Re-enable input in case it wasn't already
-                    // commandInput.disabled = false; // Done above now
-                    // commandInput.focus(); // Done above now
-                }
-            }
-        });
+
+                 try {
+                     const response = await fetch('/run', {
+                         method: 'POST',
+                         headers: {
+                             'Content-Type': 'application/json',
+                         },
+                         body: JSON.stringify(requestBody), // Use the parsed requestBody
+                     });
+
+                     // ... rest of the fetch response handling ...
+                      const result = await response.json();
+
+                     if (response.status >= 400) { // Check for HTTP error status
+                         // FastAPI/Pydantic validation errors will come here with status 422
+                         addOutput(`[ERROR] Server responded with status ${response.status}: ${result.detail ? JSON.stringify(result.detail) : result.message}`, 'log-error');
+                         commandInput.disabled = false; // Re-enable on error
+                         commandInput.focus();
+                     } else if (result.status && result.status !== 'ok') { // Handle application-level errors from the server's JSON response
+                         addOutput(`[ERROR] Failed to start command: ${result.message}`, 'log-error');
+                         commandInput.disabled = false; // Re-enable on error
+                         commandInput.focus();
+                     }
+                     else {
+                         addOutput(`[INFO] Task started successfully. Output will stream below.`, 'info-message');
+                         // Input remains disabled until the task finishes (signaled by server or manually re-enabled)
+                         // A better approach might wait for a "[INFO] Task finished." message via WebSocket.
+                         commandInput.disabled = false; // Re-enable input after successful start
+                         commandInput.focus();
+                     }
+
+                 } catch (error) {
+                     addOutput(`[ERROR] Network or server error sending command: ${error}`, 'log-error');
+                     commandInput.disabled = false; // Re-enable on error
+                     commandInput.focus();
+                 } finally {
+                     commandInput.value = ''; // Clear input field
+                 }
+             }
+         });
 
         // Initial connection
         commandInput.disabled = true; // Disable input until WebSocket connects
