@@ -5,3 +5,8 @@ beautifulsoup4>=4.12.0 # For HTML parsing
 lxml>=5.0.0            # Faster HTML parser for BeautifulSoup
 cchardet>=2.1.7        # Character encoding detection, recommended by aiohttp
 aiodns>=3.0.0          # Async DNS resolver, recommended by aiohttp
+
+# --- Added for Web Interface ---
+fastapi>=0.100.0       # The web framework
+uvicorn[standard]>=0.20.0 # ASGI server (includes websockets, cython optimizations)
+python-multipart     # Required by FastAPI for form data (though we use JSON here)
