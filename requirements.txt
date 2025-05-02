@@ -1,0 +1,7 @@
+# email_harvester/requirements.txt
+
+aiohttp>=3.9.0         # For asynchronous HTTP requests
+beautifulsoup4>=4.12.0 # For HTML parsing
+lxml>=5.0.0            # Faster HTML parser for BeautifulSoup
+cchardet>=2.1.7        # Character encoding detection, recommended by aiohttp
+aiodns>=3.0.0          # Async DNS resolver, recommended by aiohttp
