@@ -1,0 +1,21 @@
+# Ignore Python bytecode
+__pycache__/
+*.pyc
+
+# Ignore virtual environment directories
+venv/
+.venv/
+
+# Ignore your output file (IMPORTANT!)
+found_emails_on_site.txt
+
+# Ignore log files (if your logging creates files)
+*.log
+
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
+
+# Ignore editor/IDE files (optional)
+.vscode/
+.idea/
